@@ -789,12 +789,12 @@ namespace YAML
     }
     if (node["velocity_hub_height"])
     {
-      wallData.uHH_ =
+      wallData.u_HH_ =
           node["velocity_hub_height"].as<double>();
     }
     if (node["hub_height"])
     {
-      wallData.zHH_ =
+      wallData.z_HH_ =
           node["hub_height"].as<double>();
     }
     // To use the engineering wall model.

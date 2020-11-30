@@ -12,12 +12,12 @@
 // nalu
 #include <ComputeWallFrictionVelocityAlgorithm.h>
 #include <Algorithm.h>
-
 #include <FieldTypeDef.h>
 #include <Realm.h>
 #include <master_element/MasterElement.h>
 #include <master_element/MasterElementFactory.h>
 #include <NaluEnv.h>
+#include <NaluParsing.h>
 
 // stk_mesh/base/fem
 #include <stk_mesh/base/BulkData.hpp>
@@ -45,7 +45,8 @@ namespace nalu{
 ComputeWallFrictionVelocityAlgorithm::ComputeWallFrictionVelocityAlgorithm(
   Realm &realm,
   stk::mesh::Part *part,
-  const bool &useShifted)
+  const bool &useShifted,
+  const WallBoundaryConditionData &wallBCData)
   : Algorithm(realm, part),
     useShifted_(useShifted),
     yplusCrit_(11.63),
@@ -66,6 +67,16 @@ ComputeWallFrictionVelocityAlgorithm::ComputeWallFrictionVelocityAlgorithm(
   wallNormalDistanceBip_ = meta_data.get_field<GenericFieldType>(meta_data.side_rank(), "wall_normal_distance_bip");
   assembledWallArea_ = meta_data.get_field<ScalarFieldType>(stk::topology::NODE_RANK, "assembled_wall_area_wf");
   assembledWallNormalDistance_ = meta_data.get_field<ScalarFieldType>(stk::topology::NODE_RANK, "assembled_wall_normal_distance");
+
+  // check if RANSAblBcApproach; if so save BC inputs
+  WallUserData userData = wallBCData.userData_;
+  RANSAblBcApproach_ = userData.RANSAblBcApproach_;
+  if (RANSAblBcApproach_) {
+    u_HH_ = userData.u_HH_;
+    z_HH_ = userData.z_HH_;
+    RoughnessHeight rough = userData.z0_;
+    z0_ = rough.z0_;
+  }
 }
 
 //--------------------------------------------------------------------------
@@ -82,7 +93,6 @@ ComputeWallFrictionVelocityAlgorithm::~ComputeWallFrictionVelocityAlgorithm()
 void
 ComputeWallFrictionVelocityAlgorithm::execute()
 {
-
   stk::mesh::BulkData & bulk_data = realm_.bulk_data();
   stk::mesh::MetaData & meta_data = realm_.meta_data();
 
@@ -253,14 +263,20 @@ ComputeWallFrictionVelocityAlgorithm::execute()
         }
 
         // form unit normal and determine yp (approximated by 1/4 distance along edge)
-        double ypBip = 0.0;
-        for ( int j = 0; j < nDim; ++j ) {
-          const double nj = areaVec[offSetAveraVec+j]/aMag;
-          const double ej = 0.25*(coordR[j] - coordL[j]);
-          ypBip += nj*ej*nj*ej;
-          p_unitNormal[j] = nj;
+        double ypBip;
+        if (RANSAblBcApproach_) { 
+          ypBip = z0_;
         }
-        ypBip = std::sqrt(ypBip);
+        else {
+          ypBip = 0.0;
+          for ( int j = 0; j < nDim; ++j ) {
+            const double nj = areaVec[offSetAveraVec+j]/aMag;
+            const double ej = 0.25*(coordR[j] - coordL[j]);
+            ypBip += nj*ej*nj*ej;
+            p_unitNormal[j] = nj;
+          }
+          ypBip = std::sqrt(ypBip);
+        }
         wallNormalDistanceBip[ip] = ypBip;
 
         // assemble to nodal quantities
@@ -271,30 +287,36 @@ ComputeWallFrictionVelocityAlgorithm::execute()
         *assembledWallNormalDistance += aMag*ypBip;
 
         // determine tangential velocity
-        double uTangential = 0.0;
-        for ( int i = 0; i < nDim; ++i ) {
-          double uiTan = 0.0;
-          double uiBcTan = 0.0;
-          for ( int j = 0; j < nDim; ++j ) {
-            const double ninj = p_unitNormal[i]*p_unitNormal[j];
-            if ( i==j ) {
-              const double om_nini = 1.0 - ninj;
-              uiTan += om_nini*p_uBip[j];
-              uiBcTan += om_nini*p_uBcBip[j];
-            }
-            else {
-              uiTan -= ninj*p_uBip[j];
-              uiBcTan -= ninj*p_uBcBip[j];
-            }
-          }
-          uTangential += (uiTan-uiBcTan)*(uiTan-uiBcTan);
+        double utauGuess;
+        if (RANSAblBcApproach_) {
+          utauGuess = (u_HH_*kappa_)/(std::log((z_HH_+z0_)/z0_));
         }
-        uTangential = std::sqrt(uTangential);
+        else {
+          double uTangential = 0.0;
+          for ( int i = 0; i < nDim; ++i ) {
+            double uiTan = 0.0;
+            double uiBcTan = 0.0;
+            for ( int j = 0; j < nDim; ++j ) {
+              const double ninj = p_unitNormal[i]*p_unitNormal[j];
+              if ( i==j ) {
+                const double om_nini = 1.0 - ninj;
+                uiTan += om_nini*p_uBip[j];
+                uiBcTan += om_nini*p_uBcBip[j];
+              }
+              else {
+                uiTan -= ninj*p_uBip[j];
+                uiBcTan -= ninj*p_uBcBip[j];
+              }
+            }
+            uTangential += (uiTan-uiBcTan)*(uiTan-uiBcTan);
+          }
+          uTangential = std::sqrt(uTangential);
 
-        // provide an initial guess based on yplusCrit_ (more robust than a pure guess on utau)
-        double utauGuess = yplusCrit_*muBip/rhoBip/ypBip;
+          // provide an initial guess based on yplusCrit_ (more robust than a pure guess on utau)
+          utauGuess = yplusCrit_*muBip/rhoBip/ypBip;
   
-        compute_utau(uTangential, ypBip, rhoBip, muBip, utauGuess);
+          compute_utau(uTangential, ypBip, rhoBip, muBip, utauGuess);
+        }
         wallFrictionVelocityBip[ip] = utauGuess;
       }
     }
