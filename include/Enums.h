@@ -35,7 +35,6 @@ enum AlgorithmType{
   ELEM_SOURCE ,
   OVERSET ,
   WALL_ABL ,
-
   TOP_ABL,
 
   /** Set the reference pressure at a node.
