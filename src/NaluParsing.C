@@ -781,6 +781,22 @@ namespace YAML
       wallData.z0_ =
           node["roughness_height"].as<sierra::nalu::RoughnessHeight>();
     }
+    // To use the Masson BC for RANS k-omega model in an ABL
+    if (node["RANS_abl_bc"])
+    {
+      wallData.RANSAblBcApproach_ =
+          node["RANS_abl_bc"].as<bool>();
+    }
+    if (node["velocity_hub_height"])
+    {
+      wallData.uHH_ =
+          node["velocity_hub_height"].as<double>();
+    }
+    if (node["hub_height"])
+    {
+      wallData.zHH_ =
+          node["hub_height"].as<double>();
+    }
     // To use the engineering wall model.
     if (node["use_wall_function"])
     {

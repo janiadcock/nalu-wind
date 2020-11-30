@@ -60,13 +60,15 @@ struct WallUserData : public UserData {
   Pressure pressure_;
   unsigned gravityComponent_;
   RoughnessHeight z0_;
-  
+  double uHH_;
+  double zHH_; 
   
   bool isAdiabatic_;
   bool heatFluxSpec_;
   bool isInterface_;
   bool refTempSpec_;
 
+  bool RANSAblBcApproach_;
   bool wallFunctionApproach_;
   bool ablWallFunctionApproach_;
   YAML::Node ablWallFunctionNode_;
@@ -80,6 +82,7 @@ struct WallUserData : public UserData {
       heatFluxSpec_(false),
       isInterface_(false),
       refTempSpec_(false),
+      RANSAblBcApproach_(false),
       wallFunctionApproach_(false),
       ablWallFunctionApproach_(false),
       isFsiInterface_(false) {}    
