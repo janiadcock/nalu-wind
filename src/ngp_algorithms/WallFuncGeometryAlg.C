@@ -25,7 +25,9 @@ namespace nalu {
 template<typename BcAlgTraits>
 WallFuncGeometryAlg<BcAlgTraits>::WallFuncGeometryAlg(
   Realm& realm,
-  stk::mesh::Part* part)
+  stk::mesh::Part* part,
+  bool RANSAblBcApproach,
+  double z0)
   : Algorithm(realm, part),
     faceData_(realm.meta_data()),
     elemData_(realm.meta_data()),
@@ -42,7 +44,9 @@ WallFuncGeometryAlg<BcAlgTraits>::WallFuncGeometryAlg(
     meFC_(MasterElementRepo::get_surface_master_element<
           typename BcAlgTraits::FaceTraits>()),
     meSCS_(MasterElementRepo::get_surface_master_element<
-           typename BcAlgTraits::ElemTraits>())
+           typename BcAlgTraits::ElemTraits>()),
+    RANSAblBcApproach_(RANSAblBcApproach),
+    z0_(z0)
 {
   faceData_.add_cvfem_face_me(meFC_);
   elemData_.add_cvfem_surface_me(meSCS_);
@@ -105,13 +109,19 @@ void WallFuncGeometryAlg<BcAlgTraits>::execute()
         const int nodeR = meSCS->ipNodeMap(fdata.faceOrd)[ip];
         const int nodeL = meSCS->opposingNodes(fdata.faceOrd, ip);
 
-        DoubleType ypBip = 0.0;
-        for (int d=0; d < BcAlgTraits::nDim_; ++d) {
-          const DoubleType nj = v_area(ip, d) / aMag;
-          const DoubleType ej = wallNormalHeightFactor * (v_coord(nodeR, d) - v_coord(nodeL, d));
-          ypBip += nj * ej * nj * ej;
+        DoubleType ypBip;
+        if (RANSAblBcApproach_) {
+          ypBip = z0_;
         }
-        ypBip = stk::math::sqrt(ypBip);
+        else {
+          ypBip = 0.0;
+          for (int d=0; d < BcAlgTraits::nDim_; ++d) {
+            const DoubleType nj = v_area(ip, d) / aMag;
+            const DoubleType ej = wallNormalHeightFactor * (v_coord(nodeR, d) - v_coord(nodeL, d));
+            ypBip += nj * ej * nj * ej;
+          }
+          ypBip = stk::math::sqrt(ypBip);
+        }
 
         // Update the wall distance boundary integration pt (Bip)
         dBipOps(fdata, ip) = ypBip;
