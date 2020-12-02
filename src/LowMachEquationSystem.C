@@ -517,8 +517,14 @@ LowMachEquationSystem::register_open_bc(
 void
 LowMachEquationSystem::register_surface_pp_algorithm(
   const PostProcessingData &theData,
-  stk::mesh::PartVector &partVector)
+  stk::mesh::PartVector &partVector,
+  const WallBoundaryConditionData &wallBCData)
 {
+  // find out if this is a wall function approach
+  WallUserData userData = wallBCData.userData_;
+  const bool RANSAblBcApproach = userData.RANSAblBcApproach_;
+  
+
   const std::string thePhysics = theData.physics_;
 
   // register nodal fields in common
@@ -549,7 +555,7 @@ LowMachEquationSystem::register_surface_pp_algorithm(
     SurfaceForceAndMomentAlgorithm *ppAlg
       = new SurfaceForceAndMomentAlgorithm(
           realm_, partVector, theData.outputFileName_, theData.frequency_,
-          theData.parameters_, realm_.realmUsesEdges_);
+          theData.parameters_, realm_.realmUsesEdges_, wallBCData);
     surfaceForceAndMomentAlgDriver_->algVec_.push_back(ppAlg);
   }
   else if ( thePhysics == "surface_force_and_moment_wall_function" ) {
@@ -1860,7 +1866,6 @@ MomentumEquationSystem::register_wall_bc(
   const bool wallFunctionApproach = userData.wallFunctionApproach_;
   const bool ablWallFunctionApproach = userData.ablWallFunctionApproach_;
   const bool RANSAblBcApproach = userData.RANSAblBcApproach_;
-
   const bool anyWallFunctionActivated = wallFunctionApproach || ablWallFunctionApproach;
   auto& ablWallFunctionNode = userData.ablWallFunctionNode_;
 
@@ -1978,7 +1983,6 @@ MomentumEquationSystem::register_wall_bc(
 
   // Wall models or RANS BC for k and omega
   if ( anyWallFunctionActivated | RANSAblBcApproach ) {
-
     // register fields; nodal
     ScalarFieldType *assembledWallArea =  &(meta_data.declare_field<ScalarFieldType>(stk::topology::NODE_RANK, "assembled_wall_area_wf"));
     stk::mesh::put_field_on_mesh(*assembledWallArea, *part, nullptr);
@@ -1999,11 +2003,6 @@ MomentumEquationSystem::register_wall_bc(
     GenericFieldType *wallNormalDistanceBip 
       =  &(meta_data.declare_field<GenericFieldType>(sideRank, "wall_normal_distance_bip"));
     stk::mesh::put_field_on_mesh(*wallNormalDistanceBip, *part, numScsBip, nullptr);
-
-
-    GenericFieldType *wallShearStressBip
-      =  &(meta_data.declare_field<GenericFieldType>(sideRank, "wall_shear_stress_bip"));
-    stk::mesh::put_field_on_mesh(*wallShearStressBip, *part, nDim*numScsBip, nullptr);
   
     // compute friction velocity b/c not done when setting momentum BC (use Dirichlet)
     if (RANSAblBcApproach) {
@@ -2014,9 +2013,12 @@ MomentumEquationSystem::register_wall_bc(
           wfAlgType, part, "wall_func", realm_.realmUsesEdges_, wallBCData);
     }
 
-
     // Wall models only
     if (anyWallFunctionActivated) {
+      GenericFieldType *wallShearStressBip
+        =  &(meta_data.declare_field<GenericFieldType>(sideRank, "wall_shear_stress_bip"));
+      stk::mesh::put_field_on_mesh(*wallShearStressBip, *part, nDim*numScsBip, nullptr);
+
       // register the standard time-space-invariant wall heat flux (not used by the ABL wall model).
       NormalHeatFlux heatFlux = userData.q_;
       std::vector<double> userSpec(1);
@@ -2116,7 +2118,7 @@ MomentumEquationSystem::register_wall_bc(
   }
 
   // Dirichlet wall boundary condition.
-  else {
+  if (!anyWallFunctionActivated) {
     const AlgorithmType algType = WALL;
 
     std::map<AlgorithmType, SolverAlgorithm *>::iterator itd =
