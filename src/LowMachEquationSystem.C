@@ -2000,11 +2000,6 @@ MomentumEquationSystem::register_wall_bc(
       =  &(meta_data.declare_field<GenericFieldType>(sideRank, "wall_normal_distance_bip"));
     stk::mesh::put_field_on_mesh(*wallNormalDistanceBip, *part, numScsBip, nullptr);
 
-
-    GenericFieldType *wallShearStressBip
-      =  &(meta_data.declare_field<GenericFieldType>(sideRank, "wall_shear_stress_bip"));
-    stk::mesh::put_field_on_mesh(*wallShearStressBip, *part, nDim*numScsBip, nullptr);
-  
     // compute friction velocity b/c not done when setting momentum BC (use Dirichlet)
     if (RANSAblBcApproach) {
       const AlgorithmType wfAlgType = WALL_FCN;
@@ -2017,6 +2012,10 @@ MomentumEquationSystem::register_wall_bc(
 
     // Wall models only
     if (anyWallFunctionActivated) {
+      GenericFieldType *wallShearStressBip
+        =  &(meta_data.declare_field<GenericFieldType>(sideRank, "wall_shear_stress_bip"));
+      stk::mesh::put_field_on_mesh(*wallShearStressBip, *part, nDim*numScsBip, nullptr);
+
       // register the standard time-space-invariant wall heat flux (not used by the ABL wall model).
       NormalHeatFlux heatFlux = userData.q_;
       std::vector<double> userSpec(1);
@@ -2116,7 +2115,7 @@ MomentumEquationSystem::register_wall_bc(
   }
 
   // Dirichlet wall boundary condition.
-  else {
+  if (!anyWallFunctionActivated) {
     const AlgorithmType algType = WALL;
 
     std::map<AlgorithmType, SolverAlgorithm *>::iterator itd =
