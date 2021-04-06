@@ -17,8 +17,6 @@ namespace nalu {
 ActuatorMetaSimple::ActuatorMetaSimple(const ActuatorMeta& actMeta)
   : ActuatorMeta(actMeta),
     isotropicGaussian_(false),
-    epsilon_("epsilonMeta", numberOfActuators_),
-    epsilonChord_("epsilonChordMeta", numberOfActuators_),
     num_force_pts_blade_("numForcePtsBladeMeta", numberOfActuators_),
     p1_("p1Meta", numberOfActuators_),
     p2_("p2Meta", numberOfActuators_),
@@ -201,11 +199,12 @@ ActuatorBulkSimple::init_points(const ActuatorMetaSimple& actMeta)
 	  pointLocal(i) = p1[i] + 0.5*dx[i] + dx[i]*(double)np;
 	}
 
-	NaluEnv::self().naluOutput() 
-	  << "Blade "<< iBlade  // LCCOUT
-	  << " pointId: " << np << std::scientific<< std::setprecision(5)
-	  << " point: "<<pointLocal(0)<<" "<<pointLocal(1)<<" "<<pointLocal(2)
-	  << std::endl;
+  if (actMeta.debug_output_)
+    NaluEnv::self().naluOutput() 
+      << "Blade "<< iBlade  // LCCOUT
+      << " pointId: " << np << std::scientific<< std::setprecision(5)
+      << " point: "<<pointLocal(0)<<" "<<pointLocal(1)<<" "<<pointLocal(2)
+      << std::endl;
 
       }// loop over np
     }

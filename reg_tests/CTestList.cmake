@@ -37,6 +37,13 @@ function(add_test_r_inp testname np)
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname})
 endfunction(add_test_r_inp)
 
+# Verification test comparing solution norms
+function(add_test_v_sol_norm testname np)
+    add_test(${testname} sh -c "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${CMAKE_BINARY_DIR}/${nalu_ex_name} ${MPIEXEC_POSTFLAGS} -i ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${testname}/${testname}.yaml -o ${testname}.log && python3 ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${testname}/check_sol_norms.py ${testname} ${NALU_GOLD_NORMS_DIR}/test_files/${testname}/${testname}.norm.gold")
+    set_tests_properties(${testname} PROPERTIES TIMEOUT 18000 PROCESSORS ${np} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}" LABELS "verification")
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname})
+endfunction(add_test_v_sol_norm)
+
 # Verification test with three resolutions
 function(add_test_v3 testname np)
     add_test(${testname} sh -c "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${CMAKE_BINARY_DIR}/${nalu_ex_name} ${MPIEXEC_POSTFLAGS} -i ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${testname}/${testname}_R0.yaml -o ${testname}_R0.log && ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${CMAKE_BINARY_DIR}/${nalu_ex_name} ${MPIEXEC_POSTFLAGS} -i ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${testname}/${testname}_R1.yaml -o ${testname}_R1.log && ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${CMAKE_BINARY_DIR}/${nalu_ex_name} ${MPIEXEC_POSTFLAGS} -i ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${testname}/${testname}_R2.yaml -o ${testname}_R2.log && python3 ${CMAKE_CURRENT_SOURCE_DIR}/test_files/${testname}/norms.py")
@@ -68,11 +75,13 @@ function(add_test_u testname np)
     add_test(${testname} sh -c "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${CMAKE_BINARY_DIR}/${utest_ex_name} ${GTEST_SHUFFLE}")
     set_tests_properties(${testname} PROPERTIES TIMEOUT 6000 PROCESSORS ${np} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}" LABELS "unit")
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname})
-    # create symlink to nrelmw.fst 
-    execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-      ${CMAKE_BINARY_DIR}/reg_tests/test_files/nrel5MWactuatorLine/nrel5mw.fst
-      ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}/nrel5mw.fst
-    )
+    if(ENABLE_OPENFAST)
+      # create symlink to nrelmw.fst 
+      execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ${CMAKE_BINARY_DIR}/reg_tests/test_files/nrel5MWactuatorLine/nrel5mw.fst
+        ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}/nrel5mw.fst
+      )
+    endif()
 endfunction(add_test_u)
 
 # GPU unit test
@@ -81,11 +90,13 @@ function(add_test_u_gpu testname np)
     add_test(${testname} sh -c "${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np} ${MPIEXEC_PREFLAGS} ${CMAKE_BINARY_DIR}/${utest_ex_name} ${FILTER}")
     set_tests_properties(${testname} PROPERTIES TIMEOUT 6000 PROCESSORS ${np} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}" LABELS "unit")
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname})
-    # create symlink to nrelmw.fst 
-    execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
-      ${CMAKE_BINARY_DIR}/reg_tests/test_files/nrel5MWactuatorLine/nrel5mw.fst
-      ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}/nrel5mw.fst
-    )
+    if(ENABLE_OPENFAST)
+      # create symlink to nrelmw.fst 
+      execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ${CMAKE_BINARY_DIR}/reg_tests/test_files/nrel5MWactuatorLine/nrel5mw.fst
+        ${CMAKE_CURRENT_BINARY_DIR}/test_files/${testname}/nrel5mw.fst
+      )
+    endif()
 endfunction(add_test_u_gpu)
 
 # Regression test with catalyst capability
@@ -116,68 +127,27 @@ if(NOT ENABLE_CUDA)
   add_test_r(ablNeutralNGPTrilinos 2)
   add_test_r(ablNeutralEdgeSegregated 8)
   add_test_r(ablStableEdge 4)
-  add_test_r(ablStableElem 4)
+  add_test_r(ablNeutralEdgeNoSlip 4)
   add_test_r(ablUnstableEdge 4)
   add_test_r(ablUnstableEdge_ra 4)
   add_test_r(airfoilRANSEdgeNGPTrilinos.rst 1)
   add_test_r(conduction_p4 4)
-  add_test_r(cvfemHC 8)
-  add_test_r(dgMMS 6)
-  add_test_r(dgNonConformal 4)
-  add_test_r(dgNonConformal3dFluids 4)
-  add_test_r(dgNonConformal3dFluidsHexTet 4)
-  add_test_r(dgNonConformal3dFluidsP1P2 8)
-  add_test_r(dgNonConformalEdge 4)
   add_test_r(dgNonConformalEdgeCylinder 8)
-  add_test_r(dgNonConformalElemCylinder 8)
-  add_test_r(dgNonConformalFluids 4)
   add_test_r(dgNonConformalFluidsEdge 4)
-  add_test_r_rst(dgNonConformalThreeBlade 4)
   add_test_r(drivenCavity_p1 4)
-  add_test_r(ductElemWedge 2)
-  add_test_r(ductWedge 2)
   add_test_r(edgeHybridFluids 8)
   add_test_r(ekmanSpiral 4)
-  add_test_r(ekmanSpiralConsolidated 4)
-  add_test_r_inp(elemBackStepLRSST 4)
-  add_test_r(elemClosedDomain 2)
-  add_test_r(elemHybridFluids 8)
-  add_test_r(elemHybridFluidsShift 8)
-  add_test_r(femHC 2)
-  add_test_r(femHCGL 2)
-  add_test_r(heatedBackStep 4)
   add_test_r_rst(heatedWaterChannelEdge 4)
-  add_test_r(heatedWaterChannelElem 4)
-  add_test_r_rst(heliumPlume 8)
-  add_test_r(hoHelium 8)
-  add_test_r(hoVortex 2)
   add_test_r(karmanVortex 1)
-  add_test_r(milestoneRun 4)
-  add_test_r(milestoneRunConsolidated 4)
-  add_test_r_cat(mixedTetPipe 8 7)
-  add_test_r(movingCylinder 4)
-  add_test_r(nonConformalWithPeriodic 2)
-  add_test_r(nonConformalWithPeriodicConsolidated 2)
   add_test_r(nonIsoEdgeOpenJet 4)
-  add_test_r(nonIsoElemOpenJet 4)
-  add_test_r(nonIsoElemOpenJetConsolidated 4)
-  add_test_r(nonIsoNonUniformEdgeOpenJet 4)
-  add_test_r(nonIsoNonUniformElemOpenJet 4)
-  add_test_r_np(periodic3dElem 1)
-  add_test_r_np(periodic3dElem 4)
-  add_test_r_np(periodic3dElem 8)
   add_test_r_np(periodic3dEdge 1)
   add_test_r_np(periodic3dEdge 4)
   add_test_r_np(periodic3dEdge 8)
-  add_test_r(quad9HC 2)
-  add_test_r_cat(steadyTaylorVortex 4 6)
   add_test_r(taylorGreenVortex_p3 4)
-  add_test_r(variableDensNonIso 2)
-  add_test_r(variableDensNonUniform 2)
   add_test_r(vortexOpen 4)
-  add_test_r(ActLineSimple 4)
   add_test_r(ActLineSimpleFLLC 4)
   add_test_r(ActLineSimpleNGP 2)
+  add_test_r(ablHill3dSymPenalty 4)
 
   if (ENABLE_FFTW)
     add_test_r(ablHill3d_pp 4)
@@ -186,12 +156,10 @@ if(NOT ENABLE_CUDA)
   endif()
 
   if(ENABLE_HYPRE)
-    #add_test_r(airfoilRANSElem 2)
-    #add_test_r(dgncThreeBladeHypre 2)
     add_test_r_rst(amsChannelEdge 4)
     add_test_r(SSTChannelEdge 4)
     add_test_r_rst(SSTAMSChannelEdge 4)
-    add_test_r_rst(SSTAMSOversetRotCylinder 2)
+    #add_test_r_rst(SSTAMSOversetRotCylinder 2)
     add_test_r(ablNeutralNGPHypre 2)
     add_test_r(ablNeutralNGPHypreSegregated 2)
     add_test_r(airfoilRANSEdgeNGPHypre.rst 2)
@@ -223,10 +191,17 @@ if(NOT ENABLE_CUDA)
   endif()
 
   #=============================================================================
+  # Comparing solution norm tests
+  #=============================================================================
+  if(ENABLE_HYPRE)
+    add_test_v_sol_norm(convTaylorVortex 2)
+  endif(ENABLE_HYPRE)
+
+  #=============================================================================
   # Convergence tests
   #=============================================================================
   add_test_v2(BoussinesqNonIso 8)
-
+  
   #=============================================================================
   # Unit tests
   #=============================================================================
@@ -236,8 +211,6 @@ if(NOT ENABLE_CUDA)
   #=============================================================================
   # Performance tests
   #=============================================================================
-  add_test_p(uqSlidingMeshDG 8)
-  add_test_p(waleElemXflowMixFrac3.5m 8)
 
 else(NOT ENABLE_CUDA)
 
@@ -248,11 +221,12 @@ else(NOT ENABLE_CUDA)
   add_test_r(conduction_p4 2)
   add_test_r(airfoilRANSEdgeNGPTrilinos.rst 1)
   add_test_r(ActLineSimpleNGP 2)
+  add_test_r(ActLineSimpleFLLC 2)
   add_test_r(taylorGreenVortex_p3 2)
   add_test_r(drivenCavity_p1 2)
 
   if(ENABLE_OPENFAST)
-    add_test_r(nrel5MWactuatorLine 2)
+    #add_test_r(nrel5MWactuatorLine 2)
     add_subdirectory(test_files/nrel5MWactuatorLine)
   endif()
 
@@ -270,6 +244,13 @@ else(NOT ENABLE_CUDA)
   if (ENABLE_TIOGA AND ENABLE_HYPRE)
     add_test_r(oversetRotCylNGPHypre 2)
   endif()
+  
+  #=============================================================================
+  # Comparing solution norm tests
+  #=============================================================================
+  if(ENABLE_HYPRE)
+    add_test_v_sol_norm(convTaylorVortex 2)
+  endif(ENABLE_HYPRE)
 
   #=============================================================================
   # GPU unit tests

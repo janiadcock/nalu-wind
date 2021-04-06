@@ -62,18 +62,11 @@
 
 // actuator line
 #include <actuator/Actuator.h>
-#include <actuator/ActuatorParsing.h>
-#include <actuator/ActuatorBulk.h>
+#include <actuator/ActuatorModel.h>
 #include <actuator/ActuatorLineSimple.h>
-#include <actuator/ActuatorBulkSimple.h>
-#include <actuator/ActuatorParsingSimple.h>
-#include <actuator/ActuatorExecutorsSimpleNgp.h>
 #ifdef NALU_USES_OPENFAST
 #include <actuator/ActuatorLineFAST.h>
 #include <actuator/ActuatorDiskFAST.h>
-#include <actuator/ActuatorParsingFAST.h>
-#include <actuator/ActuatorBulkDiskFAST.h>
-#include <actuator/ActuatorExecutorsFASTNgp.h>
 #endif
 
 #include <wind_energy/ABLForcingAlgorithm.h>
@@ -142,6 +135,7 @@
 #include <stk_util/parallel/ParallelReduce.hpp>
 
 // stk_balance
+#include <Zoltan2_config.h>
 #include <stk_balance/balance.hpp>
 #include <stk_balance/balanceUtils.hpp>
 
@@ -160,8 +154,10 @@
 #include <utility>
 #include <stdint.h>
 
+#ifdef NALU_USES_CATALYST
 // catalyst visualization output
-#include <Iovs_DatabaseIO.h>
+#include <Iovs_exodus_DatabaseIO.h>
+#endif
 
 #define USE_NALU_PERFORMANCE_TESTING_CALLGRIND 0
 #if USE_NALU_PERFORMANCE_TESTING_CALLGRIND
@@ -185,7 +181,7 @@ namespace nalu{
     type_("multi_physics"),
     inputDBName_("input_unknown"),
     spatialDimension_(3u),  // for convenience; can always get it from meta data
-    realmUsesEdges_(false),
+    realmUsesEdges_(true),
     solveFrequency_(1),
     isTurbulent_(false),
     needsEnthalpy_(false),
@@ -213,6 +209,7 @@ namespace nalu{
     turbulenceAveragingPostProcessing_(NULL),
     dataProbePostProcessing_(NULL),
     actuator_(NULL),
+    actuatorModel_(new ActuatorModel()),
     ablForcingAlg_(NULL),
     nodeCount_(0),
     estimateMemoryOnly_(false),
@@ -599,28 +596,25 @@ Realm::look_ahead_and_creation(const YAML::Node & node)
     if ( foundActuator.size() != 1 )
       throw std::runtime_error("look_ahead_and_create::error: Too many actuator line blocks");
 
-    auto actMeta = actuator_parse(*foundActuator[0]);
 
-    const std::string ActuatorTypeName = (*foundActuator[0])["actuator"]["type"].as<std::string>() ;
-    switch ( ActuatorTypeMap[ActuatorTypeName] ) {
-        case ActuatorType::ActDiskFASTNGP:
-        case ActuatorType::ActLineFASTNGP : {
-#ifdef NALU_USES_OPENFAST
-          actuatorMeta_ = std::make_shared<ActuatorMetaFAST>(actuator_FAST_parse(node, actMeta));
-          break;
-#else
-	throw std::runtime_error("look_ahead_and_create::error: Requested actuator type: " + ActuatorTypeName + ", but was not enabled at compile time");
-#endif
-        }
+    actuatorModel_->parse(*foundActuator[0]);
+
+    // TODO delete the rest of this switch statement when remove old actuator code 
+    const std::string actuatorTypeName = (*foundActuator[0])["actuator"]["type"].as<std::string>();
+    switch ( ActuatorTypeMap[actuatorTypeName] ) {
+      case ActuatorType::ActLineSimpleNGP:
+      case ActuatorType::ActLineFASTNGP:
+      case ActuatorType::ActDiskFASTNGP:
+        break;
       case ActuatorType::ActLineFAST : {
 #ifdef NALU_USES_OPENFAST
 	actuator_ =  new ActuatorLineFAST(*this, *foundActuator[0]);
 	break;
 #else
-	throw std::runtime_error("look_ahead_and_create::error: Requested actuator type: " + ActuatorTypeName + ", but was not enabled at compile time");
+	throw std::runtime_error("look_ahead_and_create::error: Requested actuator type: " + actuatorTypeName + ", but was not enabled at compile time");
 // Avoid nvcc unreachable statement warnings
-#ifndef __CUDACC__
-	break;
+#ifndef KOKKOS_ENABLE_CUDA
+      break;
 #endif
 #endif
       }
@@ -629,10 +623,10 @@ Realm::look_ahead_and_creation(const YAML::Node & node)
 	actuator_ =  new ActuatorDiskFAST(*this, *foundActuator[0]);
 	break;
 #else
-	throw std::runtime_error("look_ahead_and_create::error: Requested actuator type: " + ActuatorTypeName + ", but was not enabled at compile time");
+	throw std::runtime_error("look_ahead_and_create::error: Requested actuator type: " + actuatorTypeName + ", but was not enabled at compile time");
 // Avoid nvcc unreachable statement warnings
-#ifndef __CUDACC__
-	break;
+#ifndef KOKKOS_ENABLE_CUDA
+      break;
 #endif
 #endif
       }
@@ -640,16 +634,11 @@ Realm::look_ahead_and_creation(const YAML::Node & node)
 	actuator_ =  new ActuatorLineSimple(*this, *foundActuator[0]);
 	break;
       }
-      case ActuatorType::ActLineSimpleNGP:{
-	actuatorMetaSimple_ = std::make_shared<ActuatorMetaSimple>(actuator_Simple_parse(node, actMeta));
-	//actuatorMeta_ = std::make_shared<ActuatorMetaFAST>(actuator_Simple_parse(node, actMeta));
-	break;
-      }
       default : {
-        throw std::runtime_error("look_ahead_and_create::error: unrecognized actuator type: " + ActuatorTypeName);
+        throw std::runtime_error("look_ahead_and_create::error: unrecognized actuator type: " + actuatorTypeName);
 // Avoid nvcc unreachable statement warnings
-#ifndef __CUDACC__
-        break;
+#ifndef KOKKOS_ENABLE_CUDA
+      break;
 #endif
       }
       }
@@ -719,16 +708,22 @@ Realm::load(const YAML::Node & node)
   }
 
   if (matrixFree_) {
-     NaluEnv::self().naluOutputP0() 
-      << "Warning: matrix free capability is experimental and only supports a limited set of use cases" << std::endl;
+    NaluEnv::self().naluOutputP0()
+      << "Warning: matrix free capability is experimental and only supports a "
+         "limited set of use cases"
+      << std::endl;
   }
 
   // let everyone know about core algorithm
   if ( realmUsesEdges_ ) {
     NaluEnv::self().naluOutputP0() << "Edge-based scheme will be activated" << std::endl;
   }
-  else {
-    NaluEnv::self().naluOutputP0() <<"Element-based scheme will be activated" << std::endl;
+  else if (matrixFree_) {
+    NaluEnv::self().naluOutputP0()
+      << "Matrix-free scheme will be activated" << std::endl;
+  } else {
+    throw std::runtime_error(
+      "Realm: Nalu-Wind only supports edge-based or matrix-free schemes");
   }
 
   // how often is the realm solved..
@@ -794,10 +789,14 @@ Realm::load(const YAML::Node & node)
   // Parse catalyst input file if requested
   if(!outputInfo_->catalystFileName_.empty())
   {
-  int error = Iovs::DatabaseIO::parseCatalystFile(outputInfo_->catalystFileName_,
+#ifdef NALU_USES_CATALYST
+  int error = Iovs_exodus::DatabaseIO::parseCatalystFile(outputInfo_->catalystFileName_,
                                                   outputInfo_->catalystParseJson_);
   if(error)
     throw std::runtime_error("Catalyst file parse failed: " + outputInfo_->catalystFileName_);
+#else
+    throw std::runtime_error("Nalu-Wind not built with Catalyst support");
+#endif
   }
 
   // solution options - loaded before create_mesh
@@ -1000,36 +999,7 @@ Realm::setup_post_processing_algorithms()
   if ( NULL != actuator_ )
     actuator_->setup();
 
-  if (NULL != actuatorMeta_)
-  {
-#ifdef NALU_USES_OPENFAST
-    switch(actuatorMeta_->actuatorType_){
-      case(ActuatorType::ActLineFASTNGP):{
-        actuatorBulk_ = std::make_unique<ActuatorBulkFAST>(*actuatorMeta_.get(),
-          get_time_step_from_file());
-       break;
-      }
-      case(ActuatorType::ActDiskFASTNGP):{
-        actuatorBulk_ = std::make_unique<ActuatorBulkDiskFAST>(*actuatorMeta_.get(),
-          get_time_step_from_file());
-        break;
-      }
-      default:{
-        ThrowErrorMsg("Unsupported actuator type");
-      }
-    }
-#else
-    ThrowErrorMsg("Actuator methods require OpenFAST");
-#endif
-  }
-
-  // For simple fixed wing problem    
-  if (NULL != actuatorMetaSimple_)
-  {
-    NaluEnv::self().naluOutputP0() << "Initializing actuatorBulkSimple_"<< std::endl; // LCCOUT                                            
-    actuatorBulkSimple_ = std::make_unique<ActuatorBulkSimple>(*actuatorMetaSimple_.get());
-  }
-
+  actuatorModel_->setup(get_time_step_from_file(), bulk_data());
 
   // check for norm nodal fields
   if ( NULL != solutionNormPostProcessing_ )
@@ -1178,6 +1148,11 @@ Realm::setup_initial_conditions()
 
       // target need not be subsetted since nothing below will depend on topo
       stk::mesh::Part *targetPart = metaData_->get_part(targetName);
+      if (!targetPart) {
+        throw std::runtime_error(
+          "Part: " + targetName +
+          " in the initial_conditions target does not exist.");
+      }
 
       switch(initCond.theIcType_) {
 
@@ -1239,6 +1214,11 @@ Realm::setup_property()
 
     // target need not be subsetted since nothing below will depend on topo
     stk::mesh::Part *targetPart = metaData_->get_part(targetNames[itarget]);
+    if (!targetPart) {
+      throw std::runtime_error(
+        "Part: " + targetNames[itarget] +
+        " in the material_properties target does not exist.");
+    }
 
     // loop over propertyMap
     std::map<PropertyIdentifier, ScalarFieldType *>::iterator ii;
@@ -1806,36 +1786,9 @@ Realm::advance_time_step()
     timerActuator_ += end_time - start_time;
   }
 
-  // check for simple actuator line; assemble the source terms for this step
-  if ( NULL != actuatorBulkSimple_ ) {
-    const double start_time = NaluEnv::self().nalu_time();
-    if(actuatorMetaSimple_->actuatorType_==ActuatorType::ActLineSimpleNGP){
-      ActuatorLineSimpleNGP(*actuatorMetaSimple_.get(),
-        *actuatorBulkSimple_.get(),
-        bulk_data())();
-    }
-    const double end_time = NaluEnv::self().nalu_time();
-    timerActuator_ += end_time - start_time;
-  }
+  // check for  actuator; assemble the source terms for this step
+  actuatorModel_->execute(timerActuator_);
 
-  // check for actuator line; assemble the source terms for this time step
-#ifdef NALU_USES_OPENFAST
-  if ( NULL != actuatorBulk_ ) {
-    const double start_time = NaluEnv::self().nalu_time();
-    if(actuatorMeta_->actuatorType_==ActuatorType::ActLineFASTNGP){
-      ActuatorLineFastNGP(*actuatorMeta_.get(),
-        *actuatorBulk_.get(),
-        bulk_data())();
-    }
-    else{
-      ActuatorDiskFastNGP(*actuatorMeta_.get(),
-        *dynamic_cast<ActuatorBulkDiskFAST*>(actuatorBulk_.get()),
-        bulk_data())();
-    }
-    const double end_time = NaluEnv::self().nalu_time();
-    timerActuator_ += end_time - start_time;
-  }
-#endif
   // Check for ABL forcing; estimate source terms for this time step
   if ( NULL != ablForcingAlg_) {
     ablForcingAlg_->execute();
@@ -1970,6 +1923,7 @@ Realm::create_output_mesh()
     std::string oname =  outputInfo_->outputDBName_ ;
     if(!outputInfo_->catalystFileName_.empty()||
        !outputInfo_->paraviewScriptName_.empty()) {
+#ifdef NALU_USES_CATALYST
       outputInfo_->outputPropertyManager_->add(Ioss::Property("CATALYST_BLOCK_PARSE_JSON_STRING",
                                                outputInfo_->catalystParseJson_));
       std::string input_deck_name = "%B";
@@ -1982,6 +1936,9 @@ Realm::create_output_mesh()
       outputInfo_->outputPropertyManager_->add(Ioss::Property("CATALYST_CREATE_SIDE_SETS", 1));
       
       resultsFileIndex_ = ioBroker_->create_output_mesh( oname, stk::io::WRITE_RESULTS, *outputInfo_->outputPropertyManager_, "catalyst" );
+#else
+      throw std::runtime_error("Nalu-Wind not built with Catalyst support");
+#endif
    }
    else {
       resultsFileIndex_ = ioBroker_->create_output_mesh( oname, stk::io::WRITE_RESULTS, *outputInfo_->outputPropertyManager_);
@@ -2317,23 +2274,7 @@ Realm::initialize_post_processing_algorithms()
     ablForcingAlg_->initialize();
   }
 
-  if (NULL != actuatorMeta_)
-  {
-#ifdef NALU_USES_OPENFAST
-    switch(actuatorMeta_->actuatorType_){
-      case(ActuatorType::ActLineFASTNGP):
-      case(ActuatorType::ActDiskFASTNGP):
-        // perform search for actline and actdisk
-        actuatorBulk_->stk_search_act_pnts(*actuatorMeta_.get(), bulk_data());
-        break;
-      default:{
-        ThrowErrorMsg("Unsupported actuator type");
-      }
-    }
-#else
-    ThrowErrorMsg("Actuator requires OpenFAST");
-#endif
-  }
+  actuatorModel_->init(bulk_data());
 }
 
 //--------------------------------------------------------------------------
@@ -2582,8 +2523,10 @@ Realm::register_nodal_fields(
   stk::mesh::put_field_on_mesh(elemVol, *part, 1, nullptr);
 
   if (realmUsesEdges_) {
-    auto& edgeAreaVec = metaData_->declare_field<VectorFieldType>(stk::topology::NODE_RANK, "edge_area_vector");
-    stk::mesh::put_field_on_mesh(edgeAreaVec, *part, metaData_->spatial_dimension(), nullptr);
+    auto& edgeAreaVec = metaData_->declare_field<VectorFieldType>(
+      stk::topology::EDGE_RANK, "edge_area_vector");
+    stk::mesh::put_field_on_mesh(
+      edgeAreaVec, *part, metaData_->spatial_dimension(), nullptr);
   }
 
   // mesh motion/deformation is high level

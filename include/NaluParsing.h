@@ -12,7 +12,6 @@
 #ifndef NaluParsing_h
 #define NaluParsing_h
 
-#include "edge_kernels/MomentumOpenEdgeKernel.h"
 #include <BoundaryConditions.h>
 #include <Enums.h>
 #include <InitialConditions.h>
@@ -65,6 +64,7 @@ struct WallUserData : public UserData {
   double zRef_;
   
   bool isAdiabatic_;
+  bool isNoSlip_;
   bool heatFluxSpec_;
   bool isInterface_;
   bool refTempSpec_;
@@ -82,6 +82,7 @@ struct WallUserData : public UserData {
       uRef_(6.6),
       zRef_(90.0),
       isAdiabatic_(false),
+      isNoSlip_(false),
       heatFluxSpec_(false),
       isInterface_(false),
       refTempSpec_(false),
