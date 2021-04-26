@@ -34,9 +34,7 @@ actuator_instance_parse(ActuatorMeta& actMeta, const YAML::Node& y_actuator)
     // I'd really like to align the naming conventions so the data in these
     // cases can be agnostic to actuator types
     switch (actMeta.actuatorType_) {
-    case (ActuatorType::ActLineSimpleNGP):
-    case (ActuatorType::ActLineSimple):
-    {
+    case (ActuatorType::ActLineSimpleNGP): {
       key = "Blade" + std::to_string(i);
       break;
     }
@@ -62,6 +60,28 @@ actuator_instance_parse(ActuatorMeta& actMeta, const YAML::Node& y_actuator)
   }
 } // namespace nalu
 
+ActuatorType
+get_backward_compatible_type(const std::string typeName)
+{
+  ActuatorType theParsedType = ActuatorTypeMap[typeName];
+  switch (theParsedType) {
+  case (ActuatorType::ActLineSimpleNGP):
+  case (ActuatorType::ActLineSimple):
+    return ActuatorType::ActLineSimpleNGP;
+  case (ActuatorType::ActLineFAST):
+  case (ActuatorType::ActLineFASTNGP):
+    return ActuatorType::ActLineFASTNGP;
+  case (ActuatorType::ActDiskFAST):
+  case (ActuatorType::ActDiskFASTNGP):
+    return ActuatorType::ActDiskFASTNGP;
+  case (ActuatorType::ActLinePointDrag):
+    return ActuatorType::ActLinePointDrag;
+  default: {
+    throw std::runtime_error("ActuatorType not supported in this context.");
+  }
+  }
+}
+
 /*! \brief Parse parameters to construct meta data for actuators
  *  Parse parameters and construct meta data for actuators.
  *  Intent is to divorce object creation/memory allocation from parsing
@@ -83,20 +103,19 @@ actuator_parse(const YAML::Node& y_node)
                  "missing from yaml node passed to actuator_parse");
   int nTurbines = 0;
   std::string actuatorTypeName;
- 
+  ActuatorType actModelType;
+
   get_required(y_actuator, "type", actuatorTypeName);
 
-  if ((ActuatorTypeMap[actuatorTypeName]==ActuatorType::ActLineSimpleNGP)||
-      (ActuatorTypeMap[actuatorTypeName]==ActuatorType::ActLineSimple))
-  {
+  actModelType = get_backward_compatible_type(actuatorTypeName);
+
+  if (actModelType == ActuatorType::ActLineSimpleNGP) {
     get_required(y_actuator, "n_simpleblades", nTurbines);
-  }
-  else
-  {
+  } else {
     get_required(y_actuator, "n_turbines_glob", nTurbines);
   }
- 
-  ActuatorMeta actMeta(nTurbines, ActuatorTypeMap[actuatorTypeName]);
+
+  ActuatorMeta actMeta(nTurbines, actModelType);
   // search specifications
   std::string searchMethodName = "na";
   get_if_present(
@@ -190,6 +209,10 @@ epsilon_parsing(int iTurb, const YAML::Node& turbNode, ActuatorMeta& actMeta)
   } else if (epsilon_chord) {
     // require epsilon chord and epsilon min
     get_required(turbNode, "epsilon_chord", epsilonTemp);
+      if (
+        epsilonTemp[0] == epsilonTemp[1] && epsilonTemp[1] == epsilonTemp[2]) {
+        actMeta.isotropicGaussian_ = true;
+      }
     for (int j = 0; j < 3; j++) {
       if (epsilonTemp[j] <= 0.0) {
         throw std::runtime_error(
@@ -202,6 +225,10 @@ epsilon_parsing(int iTurb, const YAML::Node& turbNode, ActuatorMeta& actMeta)
     // Minimum epsilon allowed in simulation. This is required when
     //   specifying epsilon/chord
     get_required(turbNode, "epsilon_min", epsilonTemp);
+      if (
+        !(actMeta.isotropicGaussian_ && epsilonTemp[0] == epsilonTemp[1] && epsilonTemp[1] == epsilonTemp[2])) {
+        actMeta.isotropicGaussian_ = false;
+      }
     for (int j = 0; j < 3; j++) {
       actMeta.epsilon_.h_view(iTurb, j) = epsilonTemp[j];
     }
