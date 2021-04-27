@@ -20,7 +20,7 @@ namespace sierra {
 namespace nalu {
 
 SDRSSTAMSNodeKernel::SDRSSTAMSNodeKernel(
-  const stk::mesh::MetaData& meta, const std::string coordsName)
+  const stk::mesh::MetaData& meta, const std::string coordsName, bool RANSAblBcApproach)
   : NGPNodeKernel<SDRSSTAMSNodeKernel>(),
     dualNodalVolumeID_(get_field_ordinal(meta, "dual_nodal_volume")),
     coordinatesID_(get_field_ordinal(meta, coordsName)),
@@ -34,7 +34,9 @@ SDRSSTAMSNodeKernel::SDRSSTAMSNodeKernel(
     dwdxID_(get_field_ordinal(meta, "dwdx")),
     prodID_(get_field_ordinal(meta, "average_production")),
     densityID_(get_field_ordinal(meta, "density")),
-    nDim_(meta.spatial_dimension())
+    nDim_(meta.spatial_dimension()),
+    RANSAblBcApproach_(RANSAblBcApproach),
+    uRef_(uRef)
 {
 }
 
@@ -53,6 +55,13 @@ SDRSSTAMSNodeKernel::setup(Realm& realm)
   fOneBlend_ = fieldMgr.get_field<double>(fOneBlendID_);
   dkdx_ = fieldMgr.get_field<double>(dkdxID_);
   dwdx_ = fieldMgr.get_field<double>(dwdxID_);
+
+  if (RANSAblBcApproach_) {
+    const double earthAngularVelocity = realm.solutionOptions.earthAngularVelocity_;
+    const double pi = std::acos(-1.0);
+    const double latitude = realm.solutionOptions.latitude_*pi/180.0;
+    corfac_ = 2.0*earthAngularVelocity*std::sin(latitude);
+  }
 
   // Update turbulence model constants
   betaStar_ = realm.get_turb_model_constant(TM_betaStar);
@@ -92,6 +101,17 @@ SDRSSTAMSNodeKernel::execute(
     fOneBlend * betaOne_ + om_fOneBlend * betaTwo_;
   const NodeKernelTraits::DblType gamma =
     fOneBlend * gammaOne_ + om_fOneBlend * gammaTwo_;
+
+  if (RANSAblBcApproach_) {
+    // add length scale limiter
+    // TO DO: make l_t a scalar field like tke or sdr
+    const DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
+    // uRef_ should be the geostrophic wind speed
+    const DblType l_e = .00027*uRef_*corfac_;
+    gammaStar = gamma + (beta - gamma)*(l_t/l_e);
+    gamma = gammaStar;
+  }
+
   const NodeKernelTraits::DblType sigmaD = 2.0 * om_fOneBlend * sigmaWTwo_;
 
   // Pw includes 1/tvisc scaling; tvisc may be zero at a dirichlet low Re

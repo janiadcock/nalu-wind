@@ -75,6 +75,9 @@ private:
   NodeKernelTraits::DblType gammaTwo_;
   NodeKernelTraits::DblType tkeProdLimitRatio_;
   const int nDim_;
+
+  bool RANSAblBcApproach_;
+  double corfac_;
 };
 
 } // namespace nalu

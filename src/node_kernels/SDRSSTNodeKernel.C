@@ -19,7 +19,7 @@
 namespace sierra {
 namespace nalu {
 
-SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta)
+SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta, bool RANSAblBcApproach)
   : NGPNodeKernel<SDRSSTNodeKernel>(),
     tkeID_(get_field_ordinal(meta, "turbulent_ke")),
     sdrID_(get_field_ordinal(meta, "specific_dissipation_rate")),
@@ -30,7 +30,9 @@ SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta)
     dwdxID_(get_field_ordinal(meta, "dwdx")),
     dualNodalVolumeID_(get_field_ordinal(meta, "dual_nodal_volume")),
     fOneBlendID_(get_field_ordinal(meta, "sst_f_one_blending")),
-    nDim_(meta.spatial_dimension())
+    nDim_(meta.spatial_dimension()),
+    RANSAblBcApproach_(RANSAblBcApproach),
+    uRef_(uRef)
 {
 }
 
@@ -51,6 +53,13 @@ SDRSSTNodeKernel::setup(Realm& realm)
 
   const std::string dofName = "specific_dissipation_rate";
   relaxFac_ = realm.solutionOptions_->get_relaxation_factor(dofName);
+
+  if (RANSAblBcApproach_) {   
+    const double earthAngularVelocity = realm.solutionOptions.earthAngularVelocity_;
+    const double pi = std::acos(-1.0);
+    const double latitude = realm.solutionOptions.latitude_*pi/180.0;
+    corfac_ = 2.0*earthAngularVelocity*std::sin(latitude);
+  }
 
   // Update turbulence model constants
   betaStar_ = realm.get_turb_model_constant(TM_betaStar);
@@ -97,7 +106,18 @@ SDRSSTNodeKernel::execute(
   // Blend constants for SDR
   const DblType omf1 = (1.0 - fOneBlend);
   const DblType beta = fOneBlend * betaOne_ + omf1 * betaTwo_;
-  const DblType gamma = fOneBlend * gammaOne_ + omf1 * gammaTwo_;
+  DblType gamma = fOneBlend * gammaOne_ + omf1 * gammaTwo_;
+
+  if (RANSAblBcApproach_) {
+    // add length scale limiter
+    // TO DO: make l_t a scalar field like tke or sdr
+    const DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
+    // uRef_ should be the geostrophic wind speed  
+    const DblType l_e = .00027*uRef_*corfac_;
+    gammaStar = gamma + (beta - gamma)*(l_t/l_e); 
+    gamma = gammaStar;
+  }
+  
   const DblType sigmaD = 2.0 * omf1 * sigmaWTwo_;
 
   // Production term with appropriate clipping of tvisc

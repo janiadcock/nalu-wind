@@ -73,6 +73,9 @@ private:
   NodeKernelTraits::DblType relaxFac_;
 
   const int nDim_;
+
+  bool RANSAblBcApproach_;
+  double corfac_;
 };
 
 }  // nalu

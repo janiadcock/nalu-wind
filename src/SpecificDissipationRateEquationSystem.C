@@ -193,7 +193,8 @@ SpecificDissipationRateEquationSystem::register_nodal_fields(
 //--------------------------------------------------------------------------
 void
 SpecificDissipationRateEquationSystem::register_interior_algorithm(
-  stk::mesh::Part *part)
+  stk::mesh::Part *part,
+  const WallBoundaryConditionData & wallBCData)
 {
 
   // types of algorithms
@@ -201,6 +202,10 @@ SpecificDissipationRateEquationSystem::register_interior_algorithm(
 
   ScalarFieldType &sdrNp1 = sdr_->field_of_state(stk::mesh::StateNP1);
   VectorFieldType &dwdxNone = dwdx_->field_of_state(stk::mesh::StateNone);
+
+  WallUserData userData = wallBCData.userData_;
+  bool RANSAblBcApproach = userData.RANSAblBcApproach_;
+  const double uRef = userData.uRef_;
 
   if (edgeNodalGradient_ && realm_.realmUsesEdges_)
     nodalGradAlgDriver_.register_edge_algorithm<ScalarNodalGradEdgeAlg>(
@@ -253,7 +258,7 @@ SpecificDissipationRateEquationSystem::register_interior_algorithm(
           nodeAlg.add_kernel<ScalarMassBDFNodeKernel>(realm_.bulk_data(), sdr_);
 
         if (SST == realm_.solutionOptions_->turbulenceModel_){
-          nodeAlg.add_kernel<SDRSSTNodeKernel>(realm_.meta_data());
+          nodeAlg.add_kernel<SDRSSTNodeKernel>(realm_.meta_data(), RANSAblBcApproach, uRef);
         }
         else if ( (SST_DES == realm_.solutionOptions_->turbulenceModel_) || (SST_IDDES == realm_.solutionOptions_->turbulenceModel_ ) ){
           nodeAlg.add_kernel<SDRSSTDESNodeKernel>(realm_.meta_data());
@@ -261,7 +266,7 @@ SpecificDissipationRateEquationSystem::register_interior_algorithm(
         else if (SST_AMS == realm_.solutionOptions_->turbulenceModel_)
           nodeAlg.add_kernel<SDRSSTAMSNodeKernel>(
             realm_.meta_data(),
-            realm_.solutionOptions_->get_coordinates_name());
+            realm_.solutionOptions_->get_coordinates_name(), RANSAblBcApproach, uRef);
         else {
           nodeAlg.add_kernel<SDRSSTNodeKernel>(realm_.meta_data());
         }
@@ -462,7 +467,7 @@ SpecificDissipationRateEquationSystem::register_wall_bc(
   WallUserData userData = wallBCData.userData_;
   bool wallFunctionApproach = userData.wallFunctionApproach_;
 
-  // is this RANS SST for an ABL? 
+  // is this RANS SST for an ABL
   bool RANSAblBcApproach = userData.RANSAblBcApproach_;
  
   // create proper algorithms to fill nodal omega and assembled wall area; utau managed by momentum
