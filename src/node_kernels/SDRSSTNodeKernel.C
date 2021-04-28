@@ -19,7 +19,7 @@
 namespace sierra {
 namespace nalu {
 
-SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta, bool RANSAblBcApproach)
+SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta)
   : NGPNodeKernel<SDRSSTNodeKernel>(),
     tkeID_(get_field_ordinal(meta, "turbulent_ke")),
     sdrID_(get_field_ordinal(meta, "specific_dissipation_rate")),
@@ -30,9 +30,7 @@ SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta, bool RANSAbl
     dwdxID_(get_field_ordinal(meta, "dwdx")),
     dualNodalVolumeID_(get_field_ordinal(meta, "dual_nodal_volume")),
     fOneBlendID_(get_field_ordinal(meta, "sst_f_one_blending")),
-    nDim_(meta.spatial_dimension()),
-    RANSAblBcApproach_(RANSAblBcApproach),
-    uRef_(uRef)
+    nDim_(meta.spatial_dimension())
 {
 }
 
@@ -54,11 +52,13 @@ SDRSSTNodeKernel::setup(Realm& realm)
   const std::string dofName = "specific_dissipation_rate";
   relaxFac_ = realm.solutionOptions_->get_relaxation_factor(dofName);
 
-  if (RANSAblBcApproach_) {   
-    const double earthAngularVelocity = realm.solutionOptions.earthAngularVelocity_;
+  SSTLengthScaleLimiter_ = realm.solutionOptions_->SSTLengthScaleLimiter_;
+  if (SSTLengthScaleLimiter_) {   
+    const double earthAngularVelocity = realm.solutionOptions_->earthAngularVelocity_;
     const double pi = std::acos(-1.0);
-    const double latitude = realm.solutionOptions.latitude_*pi/180.0;
+    const double latitude = realm.solutionOptions_->latitude_*pi/180.0;
     corfac_ = 2.0*earthAngularVelocity*std::sin(latitude);
+    geostrophicWind_ = realm.solutionOptions_->geostrophicWind_;
   }
 
   // Update turbulence model constants
@@ -108,13 +108,12 @@ SDRSSTNodeKernel::execute(
   const DblType beta = fOneBlend * betaOne_ + omf1 * betaTwo_;
   DblType gamma = fOneBlend * gammaOne_ + omf1 * gammaTwo_;
 
-  if (RANSAblBcApproach_) {
+  if (SSTLengthScaleLimiter_) {
     // add length scale limiter
     // TO DO: make l_t a scalar field like tke or sdr
     const DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
-    // uRef_ should be the geostrophic wind speed  
-    const DblType l_e = .00027*uRef_*corfac_;
-    gammaStar = gamma + (beta - gamma)*(l_t/l_e); 
+    const DblType l_e = .00027*geostrophicWind_*corfac_;
+    const DblType gammaStar = gamma + (beta - gamma)*(l_t/l_e); 
     gamma = gammaStar;
   }
   

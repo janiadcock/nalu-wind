@@ -84,7 +84,9 @@ SolutionOptions::SolutionOptions()
     activateOpenMdotCorrection_(false),
     mdotAlgOpenCorrection_(0.0),
     explicitlyZeroOpenPressureGradient_(false),
-    resetAMSAverages_(true)
+    resetAMSAverages_(true),
+    SSTLengthScaleLimiter_(false),
+    geostrophicWind_(0.0)
 {
   // nothing to do
 }
@@ -336,6 +338,8 @@ SolutionOptions::load(const YAML::Node & y_node)
           get_if_present(y_user_constants, "earth_angular_velocity", earthAngularVelocity_, earthAngularVelocity_);
           get_if_present(y_user_constants, "latitude", latitude_, latitude_);
           get_if_present(y_user_constants, "boussinesq_time_scale", raBoussinesqTimeScale_, raBoussinesqTimeScale_);
+          get_if_present(y_user_constants, "SST_length_scale_limiter", SSTLengthScaleLimiter_, SSTLengthScaleLimiter_);
+          get_if_present(y_user_constants, "geostrophic_wind", geostrophicWind_, geostrophicWind_);
 
           if (expect_sequence( y_user_constants, "gravity", optional) ) {
             const int gravSize = y_user_constants["gravity"].size();

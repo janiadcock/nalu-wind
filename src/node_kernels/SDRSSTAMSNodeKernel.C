@@ -20,7 +20,7 @@ namespace sierra {
 namespace nalu {
 
 SDRSSTAMSNodeKernel::SDRSSTAMSNodeKernel(
-  const stk::mesh::MetaData& meta, const std::string coordsName, bool RANSAblBcApproach)
+  const stk::mesh::MetaData& meta, const std::string coordsName)
   : NGPNodeKernel<SDRSSTAMSNodeKernel>(),
     dualNodalVolumeID_(get_field_ordinal(meta, "dual_nodal_volume")),
     coordinatesID_(get_field_ordinal(meta, coordsName)),
@@ -34,9 +34,7 @@ SDRSSTAMSNodeKernel::SDRSSTAMSNodeKernel(
     dwdxID_(get_field_ordinal(meta, "dwdx")),
     prodID_(get_field_ordinal(meta, "average_production")),
     densityID_(get_field_ordinal(meta, "density")),
-    nDim_(meta.spatial_dimension()),
-    RANSAblBcApproach_(RANSAblBcApproach),
-    uRef_(uRef)
+    nDim_(meta.spatial_dimension())
 {
 }
 
@@ -56,11 +54,14 @@ SDRSSTAMSNodeKernel::setup(Realm& realm)
   dkdx_ = fieldMgr.get_field<double>(dkdxID_);
   dwdx_ = fieldMgr.get_field<double>(dwdxID_);
 
-  if (RANSAblBcApproach_) {
-    const double earthAngularVelocity = realm.solutionOptions.earthAngularVelocity_;
+
+  SSTLengthScaleLimiter_ = realm.solutionOptions_->SSTLengthScaleLimiter_;
+  if (SSTLengthScaleLimiter_) {
+    const double earthAngularVelocity = realm.solutionOptions_->earthAngularVelocity_;
     const double pi = std::acos(-1.0);
-    const double latitude = realm.solutionOptions.latitude_*pi/180.0;
+    const double latitude = realm.solutionOptions_->latitude_*pi/180.0;
     corfac_ = 2.0*earthAngularVelocity*std::sin(latitude);
+    geostrophicWind_ = realm.solutionOptions_->geostrophicWind_;
   }
 
   // Update turbulence model constants
@@ -99,16 +100,15 @@ SDRSSTAMSNodeKernel::execute(
   const NodeKernelTraits::DblType om_fOneBlend = 1.0 - fOneBlend;
   const NodeKernelTraits::DblType beta =
     fOneBlend * betaOne_ + om_fOneBlend * betaTwo_;
-  const NodeKernelTraits::DblType gamma =
+  NodeKernelTraits::DblType gamma =
     fOneBlend * gammaOne_ + om_fOneBlend * gammaTwo_;
 
-  if (RANSAblBcApproach_) {
+  if (SSTLengthScaleLimiter_) {
     // add length scale limiter
     // TO DO: make l_t a scalar field like tke or sdr
-    const DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
-    // uRef_ should be the geostrophic wind speed
-    const DblType l_e = .00027*uRef_*corfac_;
-    gammaStar = gamma + (beta - gamma)*(l_t/l_e);
+    const NodeKernelTraits::DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
+    const NodeKernelTraits::DblType l_e = .00027*geostrophicWind_*corfac_;
+    const NodeKernelTraits::DblType gammaStar = gamma + (beta - gamma)*(l_t/l_e);
     gamma = gammaStar;
   }
 

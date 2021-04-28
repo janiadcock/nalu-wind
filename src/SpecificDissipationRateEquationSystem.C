@@ -193,8 +193,7 @@ SpecificDissipationRateEquationSystem::register_nodal_fields(
 //--------------------------------------------------------------------------
 void
 SpecificDissipationRateEquationSystem::register_interior_algorithm(
-  stk::mesh::Part *part,
-  const WallBoundaryConditionData & wallBCData)
+  stk::mesh::Part *part)
 {
 
   // types of algorithms
@@ -202,10 +201,6 @@ SpecificDissipationRateEquationSystem::register_interior_algorithm(
 
   ScalarFieldType &sdrNp1 = sdr_->field_of_state(stk::mesh::StateNP1);
   VectorFieldType &dwdxNone = dwdx_->field_of_state(stk::mesh::StateNone);
-
-  WallUserData userData = wallBCData.userData_;
-  bool RANSAblBcApproach = userData.RANSAblBcApproach_;
-  const double uRef = userData.uRef_;
 
   if (edgeNodalGradient_ && realm_.realmUsesEdges_)
     nodalGradAlgDriver_.register_edge_algorithm<ScalarNodalGradEdgeAlg>(
@@ -258,7 +253,7 @@ SpecificDissipationRateEquationSystem::register_interior_algorithm(
           nodeAlg.add_kernel<ScalarMassBDFNodeKernel>(realm_.bulk_data(), sdr_);
 
         if (SST == realm_.solutionOptions_->turbulenceModel_){
-          nodeAlg.add_kernel<SDRSSTNodeKernel>(realm_.meta_data(), RANSAblBcApproach, uRef);
+          nodeAlg.add_kernel<SDRSSTNodeKernel>(realm_.meta_data());
         }
         else if ( (SST_DES == realm_.solutionOptions_->turbulenceModel_) || (SST_IDDES == realm_.solutionOptions_->turbulenceModel_ ) ){
           nodeAlg.add_kernel<SDRSSTDESNodeKernel>(realm_.meta_data());
@@ -266,7 +261,7 @@ SpecificDissipationRateEquationSystem::register_interior_algorithm(
         else if (SST_AMS == realm_.solutionOptions_->turbulenceModel_)
           nodeAlg.add_kernel<SDRSSTAMSNodeKernel>(
             realm_.meta_data(),
-            realm_.solutionOptions_->get_coordinates_name(), RANSAblBcApproach, uRef);
+            realm_.solutionOptions_->get_coordinates_name());
         else {
           nodeAlg.add_kernel<SDRSSTNodeKernel>(realm_.meta_data());
         }

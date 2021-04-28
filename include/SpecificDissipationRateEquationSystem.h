@@ -43,8 +43,7 @@ public:
     stk::mesh::Part *part);
 
   void register_interior_algorithm(
-    stk::mesh::Part *part,
-    const WallBoundaryConditionData & wallBCData);
+    stk::mesh::Part *part);
   
   void register_inflow_bc(
     stk::mesh::Part *part,

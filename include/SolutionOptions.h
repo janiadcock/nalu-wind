@@ -151,6 +151,8 @@ public:
   double latitude_;
   double raBoussinesqTimeScale_;
   double symmetryBcPenaltyFactor_;
+  bool SSTLengthScaleLimiter_;
+  double geostrophicWind_; 
 
   // global mdot correction alg
   bool activateOpenMdotCorrection_;

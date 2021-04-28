@@ -76,8 +76,9 @@ private:
   NodeKernelTraits::DblType tkeProdLimitRatio_;
   const int nDim_;
 
-  bool RANSAblBcApproach_;
+  bool SSTLengthScaleLimiter_;
   double corfac_;
+  double geostrophicWind_;
 };
 
 } // namespace nalu
