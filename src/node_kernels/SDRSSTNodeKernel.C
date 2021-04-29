@@ -53,14 +53,20 @@ SDRSSTNodeKernel::setup(Realm& realm)
   relaxFac_ = realm.solutionOptions_->get_relaxation_factor(dofName);
 
   SSTLengthScaleLimiter_ = realm.solutionOptions_->SSTLengthScaleLimiter_;
+  printf("SDRSSTNodeKernel, SSTLengthScaleLimiter=%f\n", SSTLengthScaleLimiter_);
   if (SSTLengthScaleLimiter_) {   
     const double earthAngularVelocity = realm.solutionOptions_->earthAngularVelocity_;
     const double pi = std::acos(-1.0);
     const double latitude = realm.solutionOptions_->latitude_*pi/180.0;
+    printf("SDRSSTNodeKernel, earthAngularVelocity=%f\n", earthAngularVelocity);
+    printf("SDRSSTNodeKernel, realm.solutionOptions_->latitude_=%f\n", realm.solutionOptions_->latitude_);
+    printf("SDRSSTNodeKernel, pi=%f\n", pi);
+    printf("SDRSSTNodeKernel, std::sin(latitude)=%f\n", std::sin(latitude));
     corfac_ = 2.0*earthAngularVelocity*std::sin(latitude);
+    printf("SDRSSTNodeKernel if, corfac_=%f\n", corfac_);
     geostrophicWind_ = realm.solutionOptions_->geostrophicWind_;
   }
-
+  printf("SDRSSTNodeKernel, geostrophicWind_=%f\n", geostrophicWind_);
   // Update turbulence model constants
   betaStar_ = realm.get_turb_model_constant(TM_betaStar);
   tkeProdLimitRatio_ = realm.get_turb_model_constant(TM_tkeProdLimitRatio);
@@ -108,14 +114,23 @@ SDRSSTNodeKernel::execute(
   const DblType beta = fOneBlend * betaOne_ + omf1 * betaTwo_;
   DblType gamma = fOneBlend * gammaOne_ + omf1 * gammaTwo_;
 
+  printf("SDRSSTNodeKernel, gamma without limiter=%f \n",gamma);
   if (SSTLengthScaleLimiter_) {
     // add length scale limiter
     // TO DO: make l_t a scalar field like tke or sdr
+    printf("SDRSSTNodeKernel, sdr=%f \n", sdr);
+    printf("SDRSSTNodeKernel, betaStar_=%f \n", betaStar_);
+    printf("SDRSSTNodeKernel, tke=%f \n", tke);
+    printf("SDRSSTNodeKernel, corfac_=%f \n", corfac_);
     const DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
-    const DblType l_e = .00027*geostrophicWind_*corfac_;
+    const DblType l_e = .00027*geostrophicWind_/corfac_;
+    printf("SDRSSTNodeKernel, l_t=%f \n", l_t);
+    printf("SDRSSTNodeKernel, l_e=%f \n", l_e);
+    printf("SDRSSTNodeKernel, beta=%f \n", beta);
     const DblType gammaStar = gamma + (beta - gamma)*(l_t/l_e); 
     gamma = gammaStar;
   }
+  printf("SDRSSTNodeKernel, gamma with limiter=%f \n", gamma);
   
   const DblType sigmaD = 2.0 * omf1 * sigmaWTwo_;
 
