@@ -645,8 +645,9 @@ void
 LowMachEquationSystem::pre_iter_work()
 {
   momentumEqSys_->pre_iter_work();
-  if (realm_.solutionOptions_->turbulenceModel_ == SST_AMS) 
-      momentumEqSys_->AMSAlgDriver_->execute();
+  if (realm_.solutionOptions_->turbulenceModel_ == SST_AMS) { 
+    momentumEqSys_->AMSAlgDriver_->execute();
+  }
   continuityEqSys_->pre_iter_work();
 }
 
