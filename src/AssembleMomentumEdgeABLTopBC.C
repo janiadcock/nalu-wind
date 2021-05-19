@@ -339,6 +339,10 @@ AssembleMomentumEdgeABLTopBC::initialize()
 
   // Set the default zSample_ to 90% of the domain height.
 
+  // printf("zSample_: %f \n", zSample_);
+  // printf("z0: %f \n", z0);
+  // printf("z1: %f \n", z1);
+
   if (zSample_ == -999.0) { zSample_ = z0 + 0.90*zL; }
 
   // Trap bad values for zSample_.
