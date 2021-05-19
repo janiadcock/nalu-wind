@@ -30,7 +30,10 @@ SDRSSTNodeKernel::SDRSSTNodeKernel(const stk::mesh::MetaData& meta)
     dwdxID_(get_field_ordinal(meta, "dwdx")),
     dualNodalVolumeID_(get_field_ordinal(meta, "dual_nodal_volume")),
     fOneBlendID_(get_field_ordinal(meta, "sst_f_one_blending")),
-    nDim_(meta.spatial_dimension())
+    nDim_(meta.spatial_dimension()),
+    ltID_(get_field_ordinal(meta, "l_t")),
+    gammaID_(get_field_ordinal(meta, "gamma")),
+    gammaStarID_(get_field_ordinal(meta, "gammaStar"))
 {
 }
 
@@ -48,6 +51,9 @@ SDRSSTNodeKernel::setup(Realm& realm)
   dwdx_ = fieldMgr.get_field<double>(dwdxID_);
   dualNodalVolume_ = fieldMgr.get_field<double>(dualNodalVolumeID_);
   fOneBlend_ = fieldMgr.get_field<double>(fOneBlendID_);
+  lt_ = fieldMgr.get_field<double>(ltID_);
+  gamma_ = fieldMgr.get_field<double>(gammaID_);
+  gammaStar_ = fieldMgr.get_field<double>(gammaStarID_);
 
   const std::string dofName = "specific_dissipation_rate";
   relaxFac_ = realm.solutionOptions_->get_relaxation_factor(dofName);
@@ -110,9 +116,12 @@ SDRSSTNodeKernel::execute(
   if (SSTLengthScaleLimiter_) {
     // add length scale limiter
     // TO DO: make l_t a scalar field like tke or sdr
-    const DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
-    const DblType l_e = .00027*geostrophicWind_/corfac_;
-    const DblType gammaStar = gamma + (beta - gamma)*(l_t/l_e); 
+    const NodeKernelTraits::DblType l_e = .00027*geostrophicWind_/corfac_;
+    const NodeKernelTraits::DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
+    const NodeKernelTraits::DblType gammaStar = gamma + (beta - gamma)*(l_t/l_e);
+    lt_.get(node,0) = l_t;
+    gamma_.get(node,0) = gamma;
+    gammaStar_.get(node,0) = gammaStar;
     gamma = gammaStar;
   }
   

@@ -75,7 +75,10 @@ ShearStressTransportEquationSystem::ShearStressTransportEquationSystem(
     maxLengthScale_(NULL),
     isInit_(true),
     sstMaxLengthScaleAlgDriver_(NULL),
-    resetAMSAverages_(realm_.solutionOptions_->resetAMSAverages_)
+    resetAMSAverages_(realm_.solutionOptions_->resetAMSAverages_),
+    lt_(NULL),
+    gamma_(NULL),
+    gammaStar_(NULL)
 {
   // push back EQ to manager
   realm_.push_equation_to_systems(this);
@@ -140,6 +143,14 @@ ShearStressTransportEquationSystem::register_nodal_fields(
   fOneBlending_ =  &(meta_data.declare_field<ScalarFieldType>(stk::topology::NODE_RANK, "sst_f_one_blending"));
   stk::mesh::put_field_on_mesh(*fOneBlending_, *part, nullptr);
 
+  // lt, gamma, gammaStar
+  lt_ =  &(meta_data.declare_field<ScalarFieldType>(stk::topology::NODE_RANK, "l_t"));
+  stk::mesh::put_field_on_mesh(*lt_, *part, nullptr);
+  gamma_ =  &(meta_data.declare_field<ScalarFieldType>(stk::topology::NODE_RANK, "gamma"));
+  stk::mesh::put_field_on_mesh(*gamma_, *part, nullptr);
+  gammaStar_ =  &(meta_data.declare_field<ScalarFieldType>(stk::topology::NODE_RANK, "gammaStar"));
+  stk::mesh::put_field_on_mesh(*gammaStar_, *part, nullptr);
+
   // DES model
   if (
     (SST_DES == realm_.solutionOptions_->turbulenceModel_) ||
@@ -152,6 +163,9 @@ ShearStressTransportEquationSystem::register_nodal_fields(
   // add to restart field
   realm_.augment_restart_variable_list("minimum_distance_to_wall");
   realm_.augment_restart_variable_list("sst_f_one_blending");
+  realm_.augment_restart_variable_list("l_t");
+  realm_.augment_restart_variable_list("gamma");
+  realm_.augment_restart_variable_list("gammaStar");
 }
 
 //--------------------------------------------------------------------------

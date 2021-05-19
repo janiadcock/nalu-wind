@@ -34,7 +34,10 @@ SDRSSTAMSNodeKernel::SDRSSTAMSNodeKernel(
     dwdxID_(get_field_ordinal(meta, "dwdx")),
     prodID_(get_field_ordinal(meta, "average_production")),
     densityID_(get_field_ordinal(meta, "density")),
-    nDim_(meta.spatial_dimension())
+    nDim_(meta.spatial_dimension()),
+    ltID_(get_field_ordinal(meta, "l_t")),
+    gammaID_(get_field_ordinal(meta, "gamma")),
+    gammaStarID_(get_field_ordinal(meta, "gammaStar"))
 {
 }
 
@@ -53,7 +56,9 @@ SDRSSTAMSNodeKernel::setup(Realm& realm)
   fOneBlend_ = fieldMgr.get_field<double>(fOneBlendID_);
   dkdx_ = fieldMgr.get_field<double>(dkdxID_);
   dwdx_ = fieldMgr.get_field<double>(dwdxID_);
-
+  lt_ = fieldMgr.get_field<double>(ltID_);
+  gamma_ = fieldMgr.get_field<double>(gammaID_);
+  gammaStar_ = fieldMgr.get_field<double>(gammaStarID_);
 
   SSTLengthScaleLimiter_ = realm.solutionOptions_->SSTLengthScaleLimiter_;
   if (SSTLengthScaleLimiter_) {
@@ -105,10 +110,12 @@ SDRSSTAMSNodeKernel::execute(
 
   if (SSTLengthScaleLimiter_) {
     // add length scale limiter
-    // TO DO: make l_t a scalar field like tke or sdr
+    const NodeKernelTraits::DblType l_e = .00027*geostrophicWind_/corfac_;
     const NodeKernelTraits::DblType l_t = stk::math::sqrt(tke)/(stk::math::pow(betaStar_, .25)*sdr);
-    const NodeKernelTraits::DblType l_e = .00027*geostrophicWind_*corfac_;
     const NodeKernelTraits::DblType gammaStar = gamma + (beta - gamma)*(l_t/l_e);
+    lt_.get(node,0) = l_t;
+    gamma_.get(node,0) = gamma;
+    gammaStar_.get(node,0) = gammaStar;
     gamma = gammaStar;
   }
 
