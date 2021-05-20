@@ -1966,7 +1966,8 @@ MomentumEquationSystem::register_symmetry_bc(
   VectorFieldType &velocityNp1 = velocity_->field_of_state(stk::mesh::StateNP1);
   GenericFieldType &dudxNone = dudx_->field_of_state(stk::mesh::StateNone);
   using SYMMTYPES = SymmetryUserData::SymmetryTypes;
-  const SYMMTYPES symmType = symmBCData.userData_.symmType_;
+  //const SYMMTYPES symmType = symmBCData.userData_.symmType_;
+  const SYMMTYPES symmType = SYMMTYPES::Z_DIR_STRONG;
   unsigned beginPos{0}, endPos{1};
   stk::mesh::MetaData &meta_data = realm_.meta_data();
   const unsigned nDim = meta_data.spatial_dimension();
