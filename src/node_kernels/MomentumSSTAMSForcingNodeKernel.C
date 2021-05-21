@@ -35,7 +35,8 @@ MomentumSSTAMSForcingNodeKernel::MomentumSSTAMSForcingNodeKernel(
       solnOpts.get_turb_model_constant(TM_periodicForcingLengthY)),
     periodicForcingLengthZ_(
       solnOpts.get_turb_model_constant(TM_periodicForcingLengthZ)),
-    nDim_(bulk.mesh_meta_data().spatial_dimension())
+    nDim_(bulk.mesh_meta_data().spatial_dimension()),
+    kappa_(solnOpts.get_turb_model_constant(TM_kappa))
 {
   const auto& meta = bulk.mesh_meta_data();
 
@@ -84,6 +85,12 @@ MomentumSSTAMSForcingNodeKernel::setup(Realm& realm)
   avgVelocity_ = fieldMgr.get_field<double>(avgVelocityID_);
   avgResAdeq_ = fieldMgr.get_field<double>(avgResAdeqID_);
   forcingComp_ = fieldMgr.get_field<double>(forcingCompID_);
+
+  zeroForcingBelowKs_ = realm.solutionOptions_->zeroForcingBelowKs_;
+  zeroForcingEverywhere_ = realm.solutionOptions_->zeroForcingEverywhere_;
+  uRef_ = realm.solutionOptions_->referenceVelocity_;
+  zRef_ = realm.solutionOptions_->referenceHeight_;
+  z0_ = realm.solutionOptions_->roughnessHeight_;
 }
 
 void
@@ -110,7 +117,7 @@ MomentumSSTAMSForcingNodeKernel::execute(
   const NodeKernelTraits::DblType sdr = sdr_.get(node, 0);
   const NodeKernelTraits::DblType beta = beta_.get(node, 0);
   const NodeKernelTraits::DblType wallDist = minDist_.get(node, 0);
-  const NodeKernelTraits::DblType avgResAdeq = avgResAdeq_.get(node, 0);
+  const NodeKernelTraits::DblType avgResAdeq = avgResAdeq_.get(node, 0); 
 
   for (int d = 0; d < nDim_; d++) {
     avgU[d] = avgVelocity_.get(node, d);
@@ -211,6 +218,21 @@ MomentumSSTAMSForcingNodeKernel::execute(
   NodeKernelTraits::DblType gY = C_F * hY;
   NodeKernelTraits::DblType gZ = C_F * hZ;
 
+  if (zeroForcingBelowKs_) {
+    const NodeKernelTraits::DblType eta = mu/rho;
+    const NodeKernelTraits::DblType u_star = uRef_*kappa_/stk::math::log((zRef_+z0_)/z0_);
+    const NodeKernelTraits::DblType k_s = 30.*z0_*u_star/eta;
+    if (coords[2] <= k_s) {
+      gX = 0.0;
+      gY = 0.0;
+      gZ = 0.0;
+    }
+  }
+  else if (zeroForcingEverywhere_) {
+    gX = 0.0;
+    gY = 0.0;
+    gZ = 0.0;
+  }
   forcingComp_.get(node, 0) = gX;
   forcingComp_.get(node, 1) = gY;
   forcingComp_.get(node, 2) = gZ;

@@ -153,6 +153,12 @@ public:
   double symmetryBcPenaltyFactor_;
   bool SSTLengthScaleLimiter_;
   double geostrophicWind_; 
+  double referenceVelocity_;
+  double referenceHeight_;
+  double roughnessHeight_;
+  bool zeroForcingBelowKs_;
+  bool zeroForcingEverywhere_;
+
 
   // global mdot correction alg
   bool activateOpenMdotCorrection_;
