@@ -221,7 +221,7 @@ MomentumSSTAMSForcingNodeKernel::execute(
   if (zeroForcingBelowKs_) {
     const NodeKernelTraits::DblType eta = mu/rho;
     const NodeKernelTraits::DblType u_star = uRef_*kappa_/stk::math::log((zRef_+z0_)/z0_);
-    const NodeKernelTraits::DblType k_s = 30.*z0_*u_star/eta;
+    const NodeKernelTraits::DblType k_s = 30.*z0_;
     if (coords[2] <= k_s) {
       gX = 0.0;
       gY = 0.0;
