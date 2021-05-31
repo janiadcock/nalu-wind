@@ -88,8 +88,6 @@ MomentumSSTAMSForcingNodeKernel::setup(Realm& realm)
 
   zeroForcingBelowKs_ = realm.solutionOptions_->zeroForcingBelowKs_;
   zeroForcingEverywhere_ = realm.solutionOptions_->zeroForcingEverywhere_;
-  uRef_ = realm.solutionOptions_->referenceVelocity_;
-  zRef_ = realm.solutionOptions_->referenceHeight_;
   z0_ = realm.solutionOptions_->roughnessHeight_;
 }
 
@@ -219,8 +217,6 @@ MomentumSSTAMSForcingNodeKernel::execute(
   NodeKernelTraits::DblType gZ = C_F * hZ;
 
   if (zeroForcingBelowKs_) {
-    const NodeKernelTraits::DblType eta = mu/rho;
-    const NodeKernelTraits::DblType u_star = uRef_*kappa_/stk::math::log((zRef_+z0_)/z0_);
     const NodeKernelTraits::DblType k_s = 30.*z0_;
     if (coords[2] <= k_s) {
       gX = 0.0;

@@ -17,6 +17,7 @@
 #include "stk_mesh/base/NgpMesh.hpp"
 #include "EigenDecomposition.h"
 #include "utils/AMSUtils.h"
+#include "SolutionOptions.h"
 
 namespace sierra {
 namespace nalu {
@@ -57,8 +58,12 @@ SSTAMSAveragesAlg::SSTAMSAveragesAlg(Realm& realm, stk::mesh::Part* part)
     visc_(get_field_ordinal(realm.meta_data(), "viscosity")),
     beta_(get_field_ordinal(realm.meta_data(), "k_ratio")),
     Mij_(get_field_ordinal(realm.meta_data(), "metric_tensor")),
-    wallDist_(get_field_ordinal(realm.meta_data(), "minimum_distance_to_wall"))
-{
+    wallDist_(get_field_ordinal(realm.meta_data(), "minimum_distance_to_wall")),
+    coordinates_(get_field_ordinal(realm.meta_data(), realm.get_coordinates_name())),
+    zeroForcingBelowKs_(realm_.solutionOptions_->zeroForcingBelowKs_),
+    zeroForcingEverywhere_(realm_.solutionOptions_->zeroForcingEverywhere_),
+    z0_(realm_.solutionOptions_->roughnessHeight_)
+{ 
 }
 
 void
@@ -103,6 +108,7 @@ SSTAMSAveragesAlg::execute()
   auto avgDudxN = fieldMgr.get_field<double>(avgDudxN_);
   const auto Mij = fieldMgr.get_field<double>(Mij_);
   const auto wallDist = fieldMgr.get_field<double>(wallDist_);
+  const auto coords = fieldMgr.get_field<double>(coordinates_);
 
   const DblType betaStar = betaStar_;
   const DblType CMdeg = CMdeg_;
@@ -110,12 +116,24 @@ SSTAMSAveragesAlg::execute()
   const DblType beta_kol_local = beta_kol;
   const DblType aspectRatioSwitch = aspectRatioSwitch_;
 
+  const bool zeroForcingBelowKs = zeroForcingBelowKs_;
+  const bool zeroForcingEverywhere = zeroForcingEverywhere_;
+  DblType k_s;
+  if (zeroForcingBelowKs) {
+    k_s = 30.*z0_;
+  }
+
   nalu_ngp::run_entity_algorithm(
     "SSTAMSAveragesAlg_computeAverages", ngpMesh, stk::topology::NODE_RANK,
     sel, KOKKOS_LAMBDA(const Traits::MeshIndex& mi) {
       // Calculate alpha
-      if (tke.get(mi, 0) == 0.0)
+      if ((tke.get(mi, 0) == 0.0) or (zeroForcingEverywhere_))
         beta.get(mi, 0) = 1.0;
+      else if (zeroForcingBelowKs_) {
+        if (coords.get(mi,2) <= k_s) {
+          beta.get(mi, 0) = 1.0;
+        }
+      }
       else {
         beta.get(mi, 0) =
           (tke.get(mi, 0) - avgTkeRes.get(mi, 0)) / tke.get(mi, 0);
@@ -347,8 +365,13 @@ SSTAMSAveragesAlg::execute()
       const DblType PMscale = stk::math::pow(1.5 * beta.get(mi, 0) * v2, -1.5);
 
       // Handle case where tke = 0, should only occur at a wall boundary
-      if (tke.get(mi, 0) == 0.0)
+      if ((tke.get(mi, 0) == 0.0) or (zeroForcingEverywhere_))
         resAdeq.get(mi, 0) = 1.0;
+      else if (zeroForcingBelowKs_) {
+        if (coords.get(mi,2) <= k_s) {
+          resAdeq.get(mi, 0) = 1.0;
+        }
+      }
       else {
         for (int i = 0; i < nalu_ngp::NDimMax; ++i)
           for (int j = 0; j < nalu_ngp::NDimMax; ++j)

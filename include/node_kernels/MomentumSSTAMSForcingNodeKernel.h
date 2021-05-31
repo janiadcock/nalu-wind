@@ -93,8 +93,6 @@ private:
 
   bool zeroForcingBelowKs_;
   bool zeroForcingEverywhere_;
-  double uRef_;
-  double zRef_;
   double z0_;
   double kappa_;
 };

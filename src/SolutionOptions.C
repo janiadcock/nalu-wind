@@ -87,8 +87,6 @@ SolutionOptions::SolutionOptions()
     resetAMSAverages_(true),
     SSTLengthScaleLimiter_(false),
     geostrophicWind_(0.0),
-    referenceVelocity_(6.9),
-    referenceHeight_(90.0),
     roughnessHeight_(0.1),
     zeroForcingBelowKs_(false),
     zeroForcingEverywhere_(false)
@@ -345,8 +343,6 @@ SolutionOptions::load(const YAML::Node & y_node)
           get_if_present(y_user_constants, "boussinesq_time_scale", raBoussinesqTimeScale_, raBoussinesqTimeScale_);
           get_if_present(y_user_constants, "SST_length_scale_limiter", SSTLengthScaleLimiter_, SSTLengthScaleLimiter_);
           get_if_present(y_user_constants, "geostrophic_wind", geostrophicWind_, geostrophicWind_);
-          get_if_present(y_user_constants, "reference_velocity", referenceVelocity_, referenceVelocity_);
-          get_if_present(y_user_constants, "reference_height", referenceHeight_, referenceHeight_);
           get_if_present(y_user_constants, "roughness_height", roughnessHeight_, roughnessHeight_);
           get_if_present(y_user_constants, "zero_forcing_below_ks", zeroForcingBelowKs_, zeroForcingBelowKs_);
           get_if_present(y_user_constants, "zero_forcing_everywhere", zeroForcingEverywhere_, zeroForcingEverywhere_);
