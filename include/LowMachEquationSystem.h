@@ -96,6 +96,8 @@ public:
 
   void post_converged_work();
 
+  virtual void post_iter_work();
+
   const bool elementContinuityEqs_; /* allow for mixed element/edge for continuity */
   MomentumEquationSystem *momentumEqSys_;
   ContinuityEquationSystem *continuityEqSys_;
@@ -232,7 +234,7 @@ public:
 
   double firstPNGResidual_;
 
-  bool RANSAblBcApproach_;
+  bool RANSAblBcApproach_{false};
 
   // saved of mesh parts that are not to be projected
   std::vector<stk::mesh::Part *> notProjectedPart_;
