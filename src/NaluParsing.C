@@ -200,6 +200,7 @@ namespace sierra
       if(symmetryUserData["symmetry_type"]){
         const std::string symmType =
             symmetryUserData["symmetry_type"].as<std::string>();
+        printf("symmType: %s", symmType)
         if(symmType == "generalized_weak" || symmType == "default"){
           // do nothing already set, but keep for parse checking
         }
@@ -229,6 +230,8 @@ namespace sierra
       abltopBC.theBcType_ = ABLTOP_BC;
       const YAML::Node& abltopUserData = node["abltop_user_data"];
       abltopBC.userData_ = abltopUserData.as<ABLTopUserData>();
+      const YAML::Node& abltopBoundaryData = node["abltop_boundary_conditions"];
+      abltopBC.boundaryConditions_ = abltopBoundaryData.as<ABLTopBoundaryConditions>();
     }
 
     void operator >>(const YAML::Node& node,
@@ -1132,7 +1135,7 @@ namespace YAML
   bool convert<sierra::nalu::ABLTopUserData>::decode(const Node& node,
     sierra::nalu::ABLTopUserData& abltopData)
   {
-    // This allows the user to set a fixed noraml temperature gradient that is
+    // This allows the user to set a fixed normal temperature gradient that is
     // achieved through application of a compatible normal  heat flux. 
     if (node["normal_temperature_gradient"])
     {
@@ -1148,6 +1151,27 @@ namespace YAML
       abltopData.horiz_bcs_ = node["horizontal_bcs"].as<std::vector<int>>();
       if ( node["z_sample"] ) {
         abltopData.z_sample_  = node["z_sample"].as<double>();
+      }
+      if ( node["symmetry_type"] ) {
+        const std::string symmType = node["symmetry_type"].as<std::string>();
+        if(symmType == "generalized_weak" || symmType == "default"){
+          // do nothing already set, but keep for parse checking
+        }
+        else if(symmType == "x_direction_strong"){
+          abltopData.symmType_ = ABLTopUserData::SymmetryTypes::X_DIR_STRONG;
+        }
+        else if(symmType == "y_direction_strong"){
+          abltopData.symmType_ = ABLTopUserData::SymmetryTypes::Y_DIR_STRONG;
+        }
+        else if(symmType == "z_direction_strong"){
+          abltopData.symmType_ = ABLTopUserData::SymmetryTypes::Z_DIR_STRONG;
+        }
+        else{
+          throw std::runtime_error(
+            "Unrecognized value for symmetry_type: " + symmType
+            );
+        }
+
       }
     }
     return true;
